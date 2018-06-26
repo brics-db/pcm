@@ -176,43 +176,24 @@ int main(int argc, char * argv[])
     PCM::ExtendedCustomCoreEventDescription conf;
     conf.fixedCfg = NULL; // default
     conf.nGPCounters = 4;
-    switch (m->getCPUModel())
-    {
-    case PCM::WESTMERE_EX:
-        conf.OffcoreResponseMsrValue[0] = 0x40FF;                // OFFCORE_RESPONSE.ANY_REQUEST.LOCAL_DRAM:  Offcore requests satisfied by the local DRAM
-        conf.OffcoreResponseMsrValue[1] = 0x20FF;                // OFFCORE_RESPONSE.ANY_REQUEST.REMOTE_DRAM: Offcore requests satisfied by a remote DRAM
-        break;
-    case PCM::JAKETOWN:
-    case PCM::IVYTOWN:
-        conf.OffcoreResponseMsrValue[0] = 0x780400000 | 0x08FFF; // OFFCORE_RESPONSE.*.LOCAL_DRAM
-        conf.OffcoreResponseMsrValue[1] = 0x7ff800000 | 0x08FFF; // OFFCORE_RESPONSE.*.REMOTE_DRAM
-        break;
-    case PCM::HASWELLX:
-        conf.OffcoreResponseMsrValue[0] = 0x600400000 | 0x08FFF; // OFFCORE_RESPONSE.*.LOCAL_DRAM
-        conf.OffcoreResponseMsrValue[1] = 0x63f800000 | 0x08FFF; // OFFCORE_RESPONSE.*.REMOTE_DRAM
-        break;
-    case PCM::BDX:
-        conf.OffcoreResponseMsrValue[0] = 0x0604008FFF; // OFFCORE_RESPONSE.ALL_REQUESTS.L3_MISS.LOCAL_DRAM
-        conf.OffcoreResponseMsrValue[1] = 0x067BC08FFF; // OFFCORE_RESPONSE.ALL_REQUESTS.L3_MISS.REMOTE_DRAM
-        break;
-    case PCM::SKX:
-        conf.OffcoreResponseMsrValue[0] = 0x3FC0009FFF | (1 << 26); // OFFCORE_RESPONSE.ALL_REQUESTS.L3_MISS_LOCAL_DRAM.ANY_SNOOP
-        // OFFCORE_RESPONSE.ALL_REQUESTS.L3_MISS_REMOTE_(HOP0,HOP1,HOP2P)_DRAM.ANY_SNOOP
-        conf.OffcoreResponseMsrValue[1] = 0x3FC0009FFF | (1 << 27) | (1 << 28) | (1 << 29);
-        break;
-    default:
-        cerr << "pcm-numa tool does not support your processor currently." << endl;
+    
+    try {
+        m->setupCustomCoreEventsForNuma(conf);
+    }
+    catch (UnsupportedProcessorException& e) {
+        std::cerr << "pcm-numa tool does not support your processor currently." << std::endl;
         exit(EXIT_FAILURE);
     }
+
     EventSelectRegister regs[4];
     conf.gpCounterCfg = regs;
     for (int i = 0; i < 4; ++i)
         regs[i] = def_event_select_reg;
 
-    regs[0].fields.event_select = 0xB7; // OFFCORE_RESPONSE 0 event
-    regs[0].fields.umask = 0x01;
-    regs[1].fields.event_select = 0xBB; // OFFCORE_RESPONSE 1 event
-    regs[1].fields.umask = 0x01;
+    regs[0].fields.event_select = OFFCORE_RESPONSE_0_EVTNR; // OFFCORE_RESPONSE 0 event
+    regs[0].fields.umask =        OFFCORE_RESPONSE_0_UMASK;
+    regs[1].fields.event_select = OFFCORE_RESPONSE_1_EVTNR; // OFFCORE_RESPONSE 1 event
+    regs[1].fields.umask =        OFFCORE_RESPONSE_1_UMASK;
 
     PCM::ErrorCode status = m->program(PCM::EXT_CUSTOM_CORE_EVENTS, &conf);
     switch (status)
